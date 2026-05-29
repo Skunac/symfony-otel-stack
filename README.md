@@ -1,60 +1,46 @@
-# Symfony Docker
+# Symfony Observability POC
 
-A [Docker](https://www.docker.com/)-based installer and runtime for the [Symfony](https://symfony.com) web framework,
-with [FrankenPHP](https://frankenphp.dev) and [Caddy](https://caddyserver.com/) inside!
+A small Symfony application wired end-to-end for monitoring and observability.
 
-Specially tailored for coding agents: ships with a [Dev Container](https://containers.dev/) configuration
-that lets [Claude Code](https://claude.ai/claude-code) (and other AI coding assistants) run in fully autonomous
-mode inside a sandboxed environment.
+## Goal
 
-![CI](https://github.com/dunglas/symfony-docker/workflows/CI/badge.svg)
+Build a simple Symfony app that emits **logs, metrics, and traces**, ships them through
+**OpenTelemetry**, and surfaces them in **Grafana** — with dashboards that can be filtered
+**per company**. The app deliberately includes broken endpoints so there are real errors
+to observe.
 
-## Getting Started
+## Why
 
-1. If not already done, [install Docker Compose](https://docs.docker.com/compose/install/) (v2.10+)
-2. Run `docker compose build --pull --no-cache` to build fresh images
-3. Run `docker compose up --wait` to set up and start a fresh Symfony project
-4. Open `https://localhost` in your favorite web browser and [accept the auto-generated TLS certificate](https://stackoverflow.com/a/15076602/1352334)
-5. Run `docker compose down --remove-orphans` to stop the Docker containers.
+- Learn and demonstrate a realistic, production-style observability setup around Symfony.
+- Apply best practices: clean OpenTelemetry instrumentation, request identity resolved
+  once and attached everywhere, and privacy-conscious (RGPD) telemetry.
+- Having intentionally failing endpoints (500s, slow responses, warnings) provides a
+  steady, realistic stream of signals to monitor instead of contrived test data.
 
-## Features
+## How
 
-- Production, development and CI ready
-- Just 1 service by default
-- Super-readable configuration
-- Blazing-fast performance thanks to [the worker mode of FrankenPHP](https://frankenphp.dev/docs/worker/)
-- [Installation of extra Docker Compose services](docs/extra-services.md) with Symfony Flex
-- Automatic HTTPS (in dev and prod)
-- HTTP/3 and [Early Hints](https://symfony.com/blog/new-in-symfony-6-3-early-hints) support
-- Real-time messaging thanks to a built-in [Mercure hub](https://symfony.com/doc/current/mercure.html)
-- [Vulcain](https://vulcain.rocks) support
-- Native [XDebug](docs/xdebug.md) integration
-- [Hot Reloading](https://frankenphp.dev/docs/hot-reload/)
-- [Dev Container](https://containers.dev/) support, optimized for AI coding agents
-- [AI coding agents](docs/agents.md) with sandboxing out of the box
-- Rootless, slim production image
+The app authenticates users (Symfony Security); the authenticated user determines the
+`user_id` and `company_id` that get attached to telemetry. These IDs are resolved **once**
+early in the request and stamped onto **every** signal by a custom OpenTelemetry
+processor, so application code stays clean.
 
-**Enjoy!**
+Signals flow through the OpenTelemetry Collector, which routes and redacts before storage:
 
-## Docs
+```
+Symfony app ──OTLP──▶ OTel Collector ──┬──▶ Quickwit    (logs, searchable)
+                                        └──▶ Prometheus  (metrics, time-series)
 
-1. [Options available](docs/options.md)
-2. [Using Symfony Docker with an existing project](docs/existing-project.md)
-3. [Support for extra services](docs/extra-services.md)
-4. [Deploying in production](docs/production.md)
-5. [Debugging with Xdebug](docs/xdebug.md)
-6. [TLS Certificates](docs/tls.md)
-7. [Using MySQL instead of PostgreSQL](docs/mysql.md)
-8. [Using Alpine Linux instead of Debian](docs/alpine.md)
-9. [Using a Makefile](docs/makefile.md)
-10. [Updating the template](docs/updating.md)
-11. [Troubleshooting](docs/troubleshooting.md)
-12. [Using AI Coding Agents](docs/agents.md)
+                       Grafana ◀── query ── Quickwit + Prometheus
+```
 
-## License
+- **OpenTelemetry** — instrumentation and standardization layer (logs, metrics, traces).
+- **OTel Collector** — central router; also strips automatically captured PII.
+- **Quickwit** — log storage and search.
+- **Prometheus** — metrics store.
+- **Grafana** — visualization with a per-company (`$company`) dashboard filter.
 
-Symfony Docker is available under the MIT License.
+For privacy, only stable `user_id` and `company_id` are attached deliberately; anything
+PII-shaped that instrumentation captures automatically (IPs, query params, headers) is
+stripped at the Collector.
 
-## Credits
-
-Created by [Kévin Dunglas](https://dunglas.dev), co-maintained by [Maxime Helias](https://twitter.com/maxhelias) and sponsored by [Les-Tilleuls.coop](https://les-tilleuls.coop).
+See [`PLAN.md`](./docs/PLAN.md) for the phased implementation roadmap.
