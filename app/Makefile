@@ -59,8 +59,3 @@ sf: ## List all Symfony commands or pass the parameter "c=" to run a given comma
 
 cc: c=c:c ## Clear the cache
 cc: sf
-
-## —— Setup 🪝 ————————————————————————————————————————————————————————————————
-hooks: ## Enable project git hooks (gitmoji commit-msg enforcement). Run once per clone.
-	@git config core.hooksPath "$$(git rev-parse --show-toplevel)/.githooks"
-	@echo "Git hooks enabled — see .githooks/README.md"
